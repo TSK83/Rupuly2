@@ -55,6 +55,14 @@ router.post('/send-otp', (req, res) => {
       expiresAt: Date.now() + OTP_EXPIRY_MS,
     });
 
+    // پاک کردن خودکار OTP منقضی شده از مموری
+    setTimeout(() => {
+      const stored = otpStore.get(identifier);
+      if (stored && stored.code === otp) {
+        otpStore.delete(identifier);
+      }
+    }, OTP_EXPIRY_MS);
+
     const label = type === 'mobile' ? '📱 SMS' : '📧 Email';
     console.log(`${label} OTP for ${identifier}: ${otp}`);
 
@@ -154,8 +162,8 @@ router.post('/verify-otp', async (req, res) => {
 
 /**
  * POST /api/auth/google
- * Body: { credential }  (access_token از Google implicit flow)
- * دریافت اطلاعات کاربر از Google userinfo API → ساخت/یافتن کاربر → صدور JWT
+ * Body: { credential }  (ID token from Google login)
+ * Verify ID token → Create/find user → Issue JWT
  */
 router.post('/google', async (req, res) => {
   try {
@@ -168,19 +176,13 @@ router.post('/google', async (req, res) => {
       });
     }
 
-    // دریافت اطلاعات کاربر با access_token از Google userinfo API
-    const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${credential}` },
+    // Verify ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
     });
 
-    if (!googleRes.ok) {
-      return res.status(401).json({
-        success: false,
-        message: 'توکن گوگل نامعتبر است',
-      });
-    }
-
-    const payload = await googleRes.json();
+    const payload = ticket.getPayload();
     const email = payload.email;
 
     if (!email) {
