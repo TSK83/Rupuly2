@@ -22,6 +22,11 @@ const taskProgressSchema = new mongoose.Schema(
       },
       default: 'started',
     },
+
+    completedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

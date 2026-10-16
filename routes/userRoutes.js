@@ -3,6 +3,7 @@ const authMiddleware = require('../middleware/auth');
 const User = require('../models/User');
 const TaskProgress = require('../models/TaskProgress');
 const Transaction = require('../models/Transaction');
+const Reward = require('../models/Reward');
 
 const router = express.Router();
 
@@ -127,6 +128,74 @@ router.post('/withdraw', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'خطای داخلی سرور',
+    });
+  }
+});
+
+/**
+ * POST /api/user/rewards/claim
+ * بررسی و آزادسازی پاداش‌های در انتظار کاربر
+ */
+router.post('/rewards/claim', async (req, res) => {
+  try {
+    const now = new Date();
+
+    // پیدا کردن پاداش‌های در انتظار که تاریخ آزادسازی آن‌ها رسیده است
+    const matureRewards = await Reward.find({
+      userId: req.userId,
+      status: 'pending',
+      releaseDate: { $lte: now }
+    });
+
+    if (matureRewards.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'هیچ پاداش قابل آزادسازی یافت نشد',
+        data: { claimedAmount: 0 }
+      });
+    }
+
+    let totalClaimed = 0;
+    const rewardIds = [];
+
+    for (const reward of matureRewards) {
+      totalClaimed += reward.amount;
+      rewardIds.push(reward._id);
+    }
+
+    // به‌روزرسانی وضعیت پاداش‌ها
+    await Reward.updateMany(
+      { _id: { $in: rewardIds } },
+      { $set: { status: 'released', releasedAt: now } }
+    );
+
+    // به‌روزرسانی موجودی کاربر
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      {
+        $inc: {
+          balance: totalClaimed,
+          pendingBalance: -totalClaimed
+        }
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `${totalClaimed.toLocaleString()} تومان از پاداش‌های شما آزاد شد و به موجودی اضافه گردید`,
+      data: {
+        claimedAmount: totalClaimed,
+        newBalance: user.balance,
+        newPendingBalance: user.pendingBalance
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ خطا در آزادسازی پاداش‌ها:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'خطای داخلی سرور'
     });
   }
 });

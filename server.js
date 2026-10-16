@@ -130,7 +130,7 @@ app.post('/api/webhook/complete', async (req, res) => {
     // ─── 4) Add reward to User balance ───────────────────────────
     const user = await User.findByIdAndUpdate(
       userId,
-      { $inc: { balance: task.reward } },
+      { $inc: { balance: task.reward, totalEarnings: task.reward } },
       { new: true }
     );
 

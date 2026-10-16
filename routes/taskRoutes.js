@@ -124,7 +124,7 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
     // اضافه کردن پاداش به موجودی کاربر
     const User = require('../models/User');
     await User.findByIdAndUpdate(userId, {
-      $inc: { balance: task.reward },
+      $inc: { balance: task.reward, totalEarnings: task.reward },
     });
 
     console.log(`🎮 تسک "${task.gameTitle}" توسط کاربر ${userId} تکمیل شد — پاداش: ${task.reward} تومان`);
